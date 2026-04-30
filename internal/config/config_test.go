@@ -73,3 +73,60 @@ llm:
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "default_provider")
 }
+
+func TestLoadDotenvIfExists_LoadsFirstMatchWithoutOverride(t *testing.T) {
+	t.Setenv("KEEP_ME", "from-env")
+	unsetEnvForTest(t, "SET_ME")
+
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "missing.env")
+	dotenvPath := filepath.Join(dir, ".env")
+	err := os.WriteFile(dotenvPath, []byte("KEEP_ME=from-file\nSET_ME=loaded\n"), 0o600)
+	require.NoError(t, err)
+
+	loaded, err := LoadDotenvIfExists(missing, dotenvPath)
+	require.NoError(t, err)
+	require.Equal(t, dotenvPath, loaded)
+	require.Equal(t, "from-env", os.Getenv("KEEP_ME"))
+	require.Equal(t, "loaded", os.Getenv("SET_ME"))
+}
+
+func TestLoadDotenvIfExists_ParsesQuotedValues(t *testing.T) {
+	unsetEnvForTest(t, "DOUBLE")
+	unsetEnvForTest(t, "SINGLE")
+
+	dir := t.TempDir()
+	dotenvPath := filepath.Join(dir, ".env")
+	err := os.WriteFile(dotenvPath, []byte("DOUBLE=\"line\\nvalue\"\nSINGLE=' spaced value '\n"), 0o600)
+	require.NoError(t, err)
+
+	loaded, err := LoadDotenvIfExists(dotenvPath)
+	require.NoError(t, err)
+	require.Equal(t, dotenvPath, loaded)
+	require.Equal(t, "line\nvalue", os.Getenv("DOUBLE"))
+	require.Equal(t, " spaced value ", os.Getenv("SINGLE"))
+}
+
+func TestLoadDotenvIfExists_InvalidLine(t *testing.T) {
+	dir := t.TempDir()
+	dotenvPath := filepath.Join(dir, ".env")
+	err := os.WriteFile(dotenvPath, []byte("NOT_VALID\n"), 0o600)
+	require.NoError(t, err)
+
+	_, err = LoadDotenvIfExists(dotenvPath)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "missing '='")
+}
+
+func unsetEnvForTest(t *testing.T, key string) {
+	t.Helper()
+	old, existed := os.LookupEnv(key)
+	require.NoError(t, os.Unsetenv(key))
+	t.Cleanup(func() {
+		if existed {
+			require.NoError(t, os.Setenv(key, old))
+			return
+		}
+		require.NoError(t, os.Unsetenv(key))
+	})
+}

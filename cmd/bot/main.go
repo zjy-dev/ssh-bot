@@ -54,6 +54,11 @@ func main() {
 }
 
 func run(cfgPath string) error {
+	loadedDotenv, err := config.LoadDotenvIfExists(config.DotenvCandidatePaths(cfgPath)...)
+	if err != nil {
+		return fmt.Errorf("dotenv load: %w", err)
+	}
+
 	// 1. Load config.
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
@@ -64,6 +69,9 @@ func run(cfgPath string) error {
 	level := locallog.ParseLevel(cfg.Server.LogLevel)
 	logger := locallog.NewLogger(os.Stderr, level)
 	slog.SetDefault(logger)
+	if loadedDotenv != "" {
+		logger.Info("dotenv loaded", "path", loadedDotenv)
+	}
 	logger.Info("config loaded", "path", cfgPath, "default_provider", cfg.LLM.DefaultProvider)
 
 	rootCtx, cancelRoot := context.WithCancel(context.Background())

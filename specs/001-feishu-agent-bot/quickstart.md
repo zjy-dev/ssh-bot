@@ -122,7 +122,8 @@ mcp_servers: []   # start empty; add later (see §7)
 
 ## 4. Environment variables
 
-Create a `.env` (not committed):
+Create a `.env` (not committed). The bot auto-loads it on startup; existing
+process env vars still take precedence:
 
 ```sh
 LARK_APP_ID=cli_xxx
