@@ -1,0 +1,69 @@
+# Example configuration for the Feishu Agent Bot.
+# Copy to configs/config.yaml and fill in secrets via env vars (${VAR}).
+# configs/config.yaml is gitignored.
+
+server:
+  log_level: info
+  oauth_http_addr: 127.0.0.1:8080     # loopback; fronted by TLS reverse proxy
+  public_base_url: https://bot.example.com   # used to build redirect_uri
+
+lark:
+  app_id: ${LARK_APP_ID}
+  app_secret: ${LARK_APP_SECRET}
+  encrypt_key: ${LARK_ENCRYPT_KEY}
+  verification_token: ${LARK_VERIFICATION_TOKEN}
+  bot_open_id: ${LARK_BOT_OPEN_ID}
+
+redis:
+  addr: localhost:6379
+  password: ""
+  db: 0
+  session_ttl: 24h
+
+llm:
+  default_provider: claude
+  max_steps: 12
+  providers:
+    claude:
+      type: claude
+      model: claude-sonnet-4-5-20250929
+      api_key_env: ANTHROPIC_API_KEY
+      enable_thinking: true
+      max_tokens: 8192
+    gpt:
+      type: openai
+      model: gpt-4o
+      api_key_env: OPENAI_API_KEY
+      max_tokens: 8192
+    deepseek:
+      type: openai_compatible
+      model: deepseek-reasoner
+      base_url: https://api.deepseek.com/v1
+      api_key_env: DEEPSEEK_API_KEY
+      max_tokens: 8192
+
+tools:
+  web_search:
+    provider: tavily
+    api_key_env: TAVILY_API_KEY
+    max_results: 5
+  web_fetch:
+    max_chars: 20000
+
+oauth:
+  encryption_key_env: OAUTH_ENCRYPTION_KEY      # 32-byte base64
+  state_key_env: OAUTH_STATE_KEY                # 32-byte base64
+  scopes:
+    - docx:document:readonly
+    - drive:drive:readonly
+    - contact:user.base:readonly
+    - offline_access
+
+mcp_servers: []
+# Example:
+# - name: filesystem
+#   enabled: true
+#   transport: stdio
+#   command: npx
+#   args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/shared"]
+#   initialize_timeout: 10s

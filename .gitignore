@@ -1,0 +1,22 @@
+# Binaries
+/bin/
+*.exe
+*.test
+*.out
+
+# Secrets and local config
+/.env
+/configs/config.yaml
+
+# Go cache / vendoring
+/vendor/
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.tmp
