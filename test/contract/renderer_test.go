@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -198,6 +199,26 @@ func TestRenderer_BackoffOnRateLimit(t *testing.T) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	require.GreaterOrEqual(t, m.patches, 1, "should have eventually succeeded after rate-limit back-off")
+}
+
+func TestRenderer_FirstTextFlushesOnceThenBatches(t *testing.T) {
+	m := &mockSender{}
+	r := render.New(m, nil)
+
+	events := make(chan llm.StreamEvent, 16)
+	events <- llm.StreamEvent{Type: llm.EventThinkingDelta, Text: "thinking..."}
+	for i := 0; i < 10; i++ {
+		events <- llm.StreamEvent{Type: llm.EventTextDelta, Text: strings.Repeat("x", 32)}
+	}
+	events <- llm.StreamEvent{Type: llm.EventMessageEnd}
+	close(events)
+
+	require.NoError(t, r.Feed(context.Background(), "mid", events))
+	require.NoError(t, r.Stop(context.Background(), "mid"))
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	require.Less(t, m.patches, 10, "renderer should not patch once per text delta after first text")
 }
 
 // Guard against accidental JSON validity regressions.

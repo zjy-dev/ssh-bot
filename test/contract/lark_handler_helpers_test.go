@@ -219,6 +219,6 @@ func (t noopTool) Call(context.Context, json.RawMessage) (tool.Result, error) {
 	return tool.Result{Content: "ok"}, nil
 }
 
-func newHandlerForTest(store session.Store, locker session.Locker, sender *fakeSender, reg *tool.Registry, llms *llm.Registry) *lark.Handler {
+func newHandlerForTest(store session.Store, locker session.Locker, sender lark.MessageSender, reg *tool.Registry, llms *llm.Registry) *lark.Handler {
 	return lark.NewHandler(store, locker, sender, reg, llms, "ou_bot", "claude", nil)
 }

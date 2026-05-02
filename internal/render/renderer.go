@@ -126,6 +126,7 @@ func (r *Renderer) Feed(ctx context.Context, messageID string, events <-chan llm
 				flush(true)
 				return nil
 			}
+			firstText := ev.Type == llm.EventTextDelta && !r.state.ThinkingDone
 			r.mu.Lock()
 			changed := r.state.Apply(ev)
 			r.mu.Unlock()
@@ -133,7 +134,7 @@ func (r *Renderer) Feed(ctx context.Context, messageID string, events <-chan llm
 				dirty = true
 			}
 			// Force-flush on specific transition-critical events.
-			if ev.Type == llm.EventTextDelta && r.state.ThinkingDone {
+			if firstText {
 				// First text — give user immediate feedback.
 				flush(true)
 			}

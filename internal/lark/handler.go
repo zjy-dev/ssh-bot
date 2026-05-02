@@ -173,16 +173,7 @@ func (h *Handler) Handle(ctx context.Context, ev *MessageEvent) error {
 	// Buffered channel decouples agent from renderer flush cadence.
 	events := make(chan llm.StreamEvent, 64)
 	emit := func(e llm.StreamEvent) {
-		// Non-blocking best-effort; dropped events fall back to the ticker.
-		select {
-		case events <- e:
-		default:
-			// Buffer overflow: drop non-terminal events. Terminals must not
-			// be dropped, so block briefly for those.
-			if e.Type == llm.EventMessageEnd || e.Type == llm.EventError {
-				events <- e
-			}
-		}
+		events <- e
 	}
 
 	// Feed-goroutine consumes events and issues PATCHes.
