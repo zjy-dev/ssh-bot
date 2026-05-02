@@ -142,7 +142,12 @@ func (s *State) Apply(ev llm.StreamEvent) bool {
 }
 
 // MarkDone flips to the terminal state used by final flush.
-func (s *State) MarkDone() { s.Phase = PhaseDone }
+func (s *State) MarkDone() {
+	if s.Phase == PhaseError {
+		return
+	}
+	s.Phase = PhaseDone
+}
 
 // Snapshot returns a deep-copied snapshot suitable for non-blocking render.
 // Only fields used by render.go#buildCardJSON are copied.

@@ -73,6 +73,9 @@ func TestRenderer_CardJSONSizeBound(t *testing.T) {
 	for i := range large {
 		large[i] = 'x'
 	}
+	// The buffer must hold both staged events because Feed starts only after the
+	// channel is fully populated in this test.
+	events = make(chan llm.StreamEvent, 2)
 	events <- llm.StreamEvent{Type: llm.EventTextDelta, Text: string(large)}
 	events <- llm.StreamEvent{Type: llm.EventMessageEnd}
 	close(events)

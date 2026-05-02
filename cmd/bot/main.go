@@ -102,6 +102,18 @@ func run(cfgPath string) error {
 		return fmt.Errorf("oauth state signer: %w", err)
 	}
 	oauthStore := oauth.NewStore(rdb, enc)
+	larkClient := lark.NewClient(cfg.Lark.AppID, cfg.Lark.AppSecret)
+	sender := larklocal.NewSender(larkClient)
+	notifier := &larkNotifier{sender: sender}
+	oauthCfg := oauth.Config{
+		ListenAddr:    cfg.Server.OAuthHTTPAddr,
+		PublicBaseURL: cfg.Server.PublicBaseURL,
+		AppID:         cfg.Lark.AppID,
+		AppSecret:     cfg.Lark.AppSecret,
+		Scopes:        cfg.OAuth.Scopes,
+		Notifier:      notifier,
+	}
+	oauthSrv := oauth.NewServer(oauthCfg, signer, oauthStore, logger)
 
 	// 5. LLM registry.
 	llmRegistry, err := buildLLMRegistry(rootCtx, cfg, logger)
@@ -114,7 +126,28 @@ func run(cfgPath string) error {
 	if err := toolReg.Register(builtin.NewDatetime()); err != nil {
 		return fmt.Errorf("register datetime: %w", err)
 	}
-	// Other builtins (web_search, web_fetch, feishu_doc_*) land in US4 tasks.
+	searchCfg := config.LookupToolMap(cfg.Tools, "web_search")
+	fetchCfg := config.LookupToolMap(cfg.Tools, "web_fetch")
+	webSearch := builtin.NewWebSearch(builtin.WebSearchConfig{
+		Provider:   config.StringValue(searchCfg, "provider", "tavily"),
+		APIKeyEnv:  config.StringValue(searchCfg, "api_key_env", "TAVILY_API_KEY"),
+		MaxResults: config.IntValue(searchCfg, "max_results", 5),
+	})
+	webFetch := builtin.NewWebFetch(builtin.WebFetchConfig{MaxChars: config.IntValue(fetchCfg, "max_chars", 20000)})
+	if err := toolReg.Register(webSearch); err != nil {
+		return fmt.Errorf("register web_search: %w", err)
+	}
+	if err := toolReg.Register(webFetch); err != nil {
+		return fmt.Errorf("register web_fetch: %w", err)
+	}
+	refresher := oauth.NewTokenRefresher(cfg.Lark.AppID, cfg.Lark.AppSecret, oauthStore, oauthSrv.StartURL)
+	feishuDocCfg := builtin.FeishuDocConfig{Store: oauthStore, Refresher: refresher, StartURL: oauthSrv.StartURL, Client: larkClient}
+	if err := toolReg.Register(builtin.NewFeishuDocRead(feishuDocCfg)); err != nil {
+		return fmt.Errorf("register feishu_doc_read: %w", err)
+	}
+	if err := toolReg.Register(builtin.NewFeishuDocSearch(feishuDocCfg)); err != nil {
+		return fmt.Errorf("register feishu_doc_search: %w", err)
+	}
 	logger.Info("builtin tools registered", "count", len(toolReg.List()))
 
 	// 7. MCP manager (skeleton in v1 Phase 2; real transports in US5).
@@ -136,6 +169,11 @@ func run(cfgPath string) error {
 	if err := mcpMgr.LoadAll(rootCtx, mcpCfgs); err != nil {
 		logger.Warn("mcp LoadAll error", "err", err.Error())
 	}
+	for _, tl := range mcpMgr.Tools() {
+		if err := toolReg.Register(tl); err != nil {
+			logger.Warn("mcp tool register failed", "tool", tl.Name(), "err", err.Error())
+		}
+	}
 	var mcpFailed, mcpOK int
 	for _, s := range mcpMgr.Status() {
 		if s.Connected {
@@ -146,25 +184,7 @@ func run(cfgPath string) error {
 	}
 	logger.Info("mcp servers loaded", "ok", mcpOK, "failed", mcpFailed, "skipped", len(cfg.MCPServers)-mcpOK-mcpFailed)
 
-	// 8. Lark client (REST) + ws (event subscription) + sender.
-	larkClient := lark.NewClient(cfg.Lark.AppID, cfg.Lark.AppSecret)
-	sender := larklocal.NewSender(larkClient)
-
-	// OAuth notifier backed by lark sender.
-	notifier := &larkNotifier{sender: sender}
-
-	oauthCfg := oauth.Config{
-		ListenAddr:    cfg.Server.OAuthHTTPAddr,
-		PublicBaseURL: cfg.Server.PublicBaseURL,
-		AppID:         cfg.Lark.AppID,
-		AppSecret:     cfg.Lark.AppSecret,
-		Scopes:        cfg.OAuth.Scopes,
-		Notifier:      notifier,
-	}
-	oauthSrv := oauth.NewServer(oauthCfg, signer, oauthStore, logger)
-	_ = oauthSrv // goroutine below runs it
-
-	// Handler.
+	// 8. Handler + long-connection runtime wiring.
 	handler := larklocal.NewHandler(
 		sessStore, locker, sender, toolReg, llmRegistry,
 		cfg.Lark.BotOpenID, cfg.LLM.DefaultProvider, logger,

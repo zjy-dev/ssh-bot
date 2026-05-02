@@ -1,8 +1,10 @@
 # Binaries
 /bin/
+/build/
 *.exe
 *.test
 *.out
+*.log
 
 # Secrets and local config
 /.env

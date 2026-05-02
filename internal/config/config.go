@@ -146,6 +146,48 @@ func expandValue(v any) any {
 	}
 }
 
+// LookupToolMap returns the named tool sub-config as a string-keyed map.
+func LookupToolMap(m map[string]any, key string) map[string]any {
+	if m == nil {
+		return nil
+	}
+	raw, ok := m[key]
+	if !ok {
+		return nil
+	}
+	out, _ := raw.(map[string]any)
+	return out
+}
+
+// StringValue returns a string from a dynamic config map or a fallback.
+func StringValue(m map[string]any, key, fallback string) string {
+	if m == nil {
+		return fallback
+	}
+	v, _ := m[key].(string)
+	if v == "" {
+		return fallback
+	}
+	return v
+}
+
+// IntValue returns an int from a dynamic config map or a fallback.
+func IntValue(m map[string]any, key string, fallback int) int {
+	if m == nil {
+		return fallback
+	}
+	switch v := m[key].(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	default:
+		return fallback
+	}
+}
+
 // validate checks critical required fields. Missing provider API keys are NOT
 // fatal — the provider factory disables the profile instead (see
 // internal/llm/provider.go). This keeps the bot operable in "degraded" mode.

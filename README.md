@@ -15,6 +15,50 @@ make vet
 make fmt-check
 ```
 
+## Required env vars
+
+- `LARK_APP_ID`
+- `LARK_APP_SECRET`
+- `LARK_ENCRYPT_KEY`
+- `LARK_VERIFICATION_TOKEN`
+- `LARK_BOT_OPEN_ID`
+- `OAUTH_ENCRYPTION_KEY`
+- `OAUTH_STATE_KEY`
+
+One configured provider key is also required, for example:
+
+- `ANTHROPIC_API_KEY`
+- `OPENAI_API_KEY`
+- `DEEPSEEK_API_KEY`
+
+Optional tool keys:
+
+- `TAVILY_API_KEY`
+
+## Deployment notes
+
+- Feishu events arrive through long connection, but OAuth callback still requires a public HTTPS endpoint.
+- Recommended deployment shape: run the bot privately, terminate TLS at a reverse proxy, and forward `/oauth/*` plus `/healthz` to the bot's local HTTP listener.
+- Redis stores 24h sessions, per-user locks, and encrypted OAuth credentials. Team-scale deployments generally only need a small Redis instance.
+
+## Reverse proxy example
+
+Example Caddy config:
+
+```caddy
+bot.example.com {
+  reverse_proxy /oauth/* 127.0.0.1:8080
+  reverse_proxy /healthz 127.0.0.1:8080
+}
+```
+
+## Container
+
+```sh
+docker build -t ssh-bot .
+docker run --rm --env-file .env -p 8080:8080 ssh-bot
+```
+
 ## Status
 
 Feature branch `001-feishu-agent-bot`; see `specs/001-feishu-agent-bot/tasks.md` for the task-level state of the implementation.

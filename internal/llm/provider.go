@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sort"
 
 	"github.com/cloudwego/eino/components/model"
 )
@@ -71,13 +72,14 @@ func (r *Registry) Default() Provider {
 	return r.providers[r.defaultP]
 }
 
-// Names returns all registered provider aliases in insertion order.
-// Used by /model command.
+// Names returns all registered provider aliases in deterministic order.
+// Used by /model command output and tests.
 func (r *Registry) Names() []string {
 	names := make([]string, 0, len(r.providers))
 	for k := range r.providers {
 		names = append(names, k)
 	}
+	sort.Strings(names)
 	return names
 }
 

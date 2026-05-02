@@ -2,16 +2,17 @@ package lark
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	lark "github.com/larksuite/oapi-sdk-go/v3"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
+
+	"github.com/anomalyco/ssh-bot/internal/render"
 )
 
 // ErrRateLimited is returned by Sender.Patch when Feishu responds with
 // 230020 (per-message frequency limit). Renderer subscribes to this sentinel.
-var ErrRateLimited = errors.New("lark: card update rate-limited (230020)")
+var ErrRateLimited = render.ErrRateLimited
 
 // Sender is the thin wrapper around the Lark SDK that the bot actually uses
 // outward-facing. It implements the render.Sender interface.
@@ -21,6 +22,30 @@ type Sender struct {
 
 // NewSender constructs a Sender from a pre-built *lark.Client.
 func NewSender(client *lark.Client) *Sender { return &Sender{client: client} }
+
+// SendMessage posts a plain text message to the given chat.
+func (s *Sender) SendMessage(ctx context.Context, chatID, text string) error {
+	content, err := jsonMarshalIndirect(map[string]string{"text": text})
+	if err != nil {
+		return fmt.Errorf("lark marshal text message: %w", err)
+	}
+	req := larkim.NewCreateMessageReqBuilder().
+		ReceiveIdType(larkim.ReceiveIdTypeChatId).
+		Body(larkim.NewCreateMessageReqBodyBuilder().
+			ReceiveId(chatID).
+			MsgType(larkim.MsgTypeText).
+			Content(string(content)).
+			Build()).
+		Build()
+	resp, err := s.client.Im.Message.Create(ctx, req)
+	if err != nil {
+		return fmt.Errorf("lark create text message: %w", err)
+	}
+	if !resp.Success() {
+		return fmt.Errorf("lark create text message: code=%d msg=%s", resp.Code, resp.Msg)
+	}
+	return nil
+}
 
 // SendInitialCard posts a fresh interactive card to chatID and returns the
 // new message_id (used for subsequent Patch calls).

@@ -20,7 +20,10 @@ COPY --from=build /out/bot /bot
 COPY configs/config.example.yaml /configs/config.example.yaml
 
 USER nonroot:nonroot
+WORKDIR /
 EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 CMD ["/bot", "--config", "/configs/config.example.yaml"]
 
 ENTRYPOINT ["/bot"]
 CMD ["--config", "/configs/config.yaml"]

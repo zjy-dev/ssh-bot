@@ -149,12 +149,12 @@ description: "Task list for 001-feishu-agent-bot implementation"
 
 ### Contract tests for User Story 2
 
-- [ ] T054 [P] [US2] Contract test `test/contract/us2_p2p_flow_test.go` — mirror T047 but with `ChatType=p2p` and a message with no @-mention.
+- [x] T054 [P] [US2] Contract test `test/contract/us2_p2p_flow_test.go` — mirror T047 but with `ChatType=p2p` and a message with no @-mention.
 
 ### Implementation for User Story 2
 
-- [ ] T055 [US2] Extend `internal/lark/handler.go`: for `ChatType == "p2p"`, skip the `MentionedBot` gate; always accept. Session key = `p2p:<open_id>` (data-model C1). Edit T049.
-- [ ] T056 [P] [US2] Integration test `test/integration/us2_p2p_test.go` — sends a p2p event, asserts the same success criteria as T053.
+- [x] T055 [US2] Extend `internal/lark/handler.go`: for `ChatType == "p2p"`, skip the `MentionedBot` gate; always accept. Session key = `p2p:<open_id>` (data-model C1). Edit T049.
+- [x] T056 [P] [US2] Integration test `test/integration/us2_p2p_test.go` — sends a p2p event, asserts the same success criteria as T053.
 
 **Checkpoint**: US1 + US2 both functional. Basic AI chat in groups and DMs works for every team member.
 
@@ -168,13 +168,13 @@ description: "Task list for 001-feishu-agent-bot implementation"
 
 ### Contract tests for User Story 3
 
-- [ ] T057 [P] [US3] Contract test `test/contract/us3_commands_test.go` — each command short-circuits without invoking the mocked LLM (assert `Provider.Stream` is called zero times). `/clear` calls `Store.Delete`. `/model invalid` returns listing. `/tools` lists all registered tools.
+- [x] T057 [P] [US3] Contract test `test/contract/us3_commands_test.go` — each command short-circuits without invoking the mocked LLM (assert `Provider.Stream` is called zero times). `/clear` calls `Store.Delete`. `/model invalid` returns listing. `/tools` lists all registered tools.
 
 ### Implementation for User Story 3
 
-- [ ] T058 [US3] Implement command dispatcher `internal/lark/commands.go` with handlers for `/clear`, `/help`, `/model`, `/tools`, `/whoami`. Each returns a structured response that `handler.go` sends via `Sender.SendMessage`. Commands MUST run outside the per-user lock path (FR-021: no context contamination, no lock contention).
-- [ ] T059 [US3] Wire `commands.go` into `internal/lark/handler.go` — dispatch BEFORE lock acquire, BEFORE session load. Edit T049/T055.
-- [ ] T060 [P] [US3] Integration test `test/integration/us3_commands_test.go` — send each command in sequence against real Redis + a **nil-op** LLM provider, assert zero provider invocations occurred.
+- [x] T058 [US3] Implement command dispatcher `internal/lark/commands.go` with handlers for `/clear`, `/help`, `/model`, `/tools`, `/whoami`. Each returns a structured response that `handler.go` sends via `Sender.SendMessage`. Commands MUST run outside the per-user lock path (FR-021: no context contamination, no lock contention).
+- [x] T059 [US3] Wire `commands.go` into `internal/lark/handler.go` — dispatch BEFORE lock acquire, BEFORE session load. Edit T049/T055.
+- [x] T060 [P] [US3] Integration test `test/integration/us3_commands_test.go` — send each command in sequence against real Redis + a **nil-op** LLM provider, assert zero provider invocations occurred.
 
 **Checkpoint**: Users have full session control. Still no tools.
 
@@ -188,19 +188,19 @@ description: "Task list for 001-feishu-agent-bot implementation"
 
 ### Contract tests for User Story 4
 
-- [ ] T061 [P] [US4] Contract test `test/contract/us4_web_search_test.go` — schema validation: args missing `query` → `is_error=true`; valid args → mocked HTTP returns canned results → tool returns numbered markdown list per `contracts/tools.md#web_search`.
-- [ ] T062 [P] [US4] Contract test `test/contract/us4_web_fetch_ssrf_test.go` — URLs with scheme `file://`, hosts resolving to `127.0.0.1`, `10.0.0.0/8`, etc. all rejected with `is_error=true` before any HTTP call (SSRF defense per `contracts/tools.md#web_fetch`).
-- [ ] T063 [P] [US4] Contract test `test/contract/us4_feishu_doc_oauth_test.go` — `feishu_doc_read` when no OAuth credential for user returns `is_error=true, content` containing a `/oauth/start?state=…` URL (the signed state from T040).
+- [x] T061 [P] [US4] Contract test `test/contract/us4_web_search_test.go` — schema validation: args missing `query` → `is_error=true`; valid args → mocked HTTP returns canned results → tool returns numbered markdown list per `contracts/tools.md#web_search`.
+- [x] T062 [P] [US4] Contract test `test/contract/us4_web_fetch_ssrf_test.go` — URLs with scheme `file://`, hosts resolving to `127.0.0.1`, `10.0.0.0/8`, etc. all rejected with `is_error=true` before any HTTP call (SSRF defense per `contracts/tools.md#web_fetch`).
+- [x] T063 [P] [US4] Contract test `test/contract/us4_feishu_doc_oauth_test.go` — `feishu_doc_read` when no OAuth credential for user returns `is_error=true, content` containing a `/oauth/start?state=…` URL (the signed state from T040).
 
 ### Tool implementations
 
-- [ ] T064 [P] [US4] Implement `internal/tool/builtin/web_search.go` — Tavily client (default), schema + result per contracts/tools.md. Config reads `tools.web_search.api_key_env`.
-- [ ] T065 [P] [US4] Implement `internal/tool/builtin/web_fetch.go` — HTTPS fetch + go-readability conversion. Enforce scheme allowlist, pre-fetch DNS resolution + RFC1918 check, `robots.txt` Disallow check, 10 s timeout, 5 MB body cap (contracts/tools.md#web_fetch).
-- [ ] T066 [P] [US4] Implement `internal/tool/builtin/feishu_doc_read.go` — look up `UserOAuthCredential` via `internal/oauth.Store`, refresh if access_token within 60 s of expiry (per D3 + FR-047), call Feishu docx/docs API. On 403 → error per contracts. On no-credential → return OAuth-start URL.
-- [ ] T067 [P] [US4] Implement `internal/tool/builtin/feishu_doc_search.go` — same auth path as T066, hits search API with `query`. Note open item O1: exact scope name to be confirmed empirically; wire the call and log `permission_violations` from error responses.
-- [ ] T068 [US4] Register all five builtins (plus existing `datetime` from T027) in `cmd/bot/main.go`'s tool registry setup. Edit T046.
-- [ ] T069 [US4] Token refresh path — in `internal/oauth/tokens.go`, add `RefreshIfNeeded(ctx, cred) (*UserOAuthCredential, error)` invoked by T066/T067 before use. On 4xx from refresh endpoint, delete the credential (per D3 "invalidated" state transition) and return the OAuth-start URL as a typed sentinel error.
-- [ ] T070 [US4] Rate-limit `/oauth/callback` — finalize the token-bucket from T043 to 20/min/IP per contract. Add metrics counter for denial rate (Phase N-friendly).
+- [x] T064 [P] [US4] Implement `internal/tool/builtin/web_search.go` — Tavily client (default), schema + result per contracts/tools.md. Config reads `tools.web_search.api_key_env`.
+- [x] T065 [P] [US4] Implement `internal/tool/builtin/web_fetch.go` — HTTPS fetch + go-readability conversion. Enforce scheme allowlist, pre-fetch DNS resolution + RFC1918 check, `robots.txt` Disallow check, 10 s timeout, 5 MB body cap (contracts/tools.md#web_fetch).
+- [x] T066 [P] [US4] Implement `internal/tool/builtin/feishu_doc_read.go` — look up `UserOAuthCredential` via `internal/oauth.Store`, refresh if access_token within 60 s of expiry (per D3 + FR-047), call Feishu docx/docs API. On 403 → error per contracts. On no-credential → return OAuth-start URL.
+- [x] T067 [P] [US4] Implement `internal/tool/builtin/feishu_doc_search.go` — same auth path as T066, hits search API with `query`. Note open item O1: exact scope name to be confirmed empirically; wire the call and log `permission_violations` from error responses.
+- [x] T068 [US4] Register all five builtins (plus existing `datetime` from T027) in `cmd/bot/main.go`'s tool registry setup. Edit T046.
+- [x] T069 [US4] Token refresh path — in `internal/oauth/tokens.go`, add `RefreshIfNeeded(ctx, cred) (*UserOAuthCredential, error)` invoked by T066/T067 before use. On 4xx from refresh endpoint, delete the credential (per D3 "invalidated" state transition) and return the OAuth-start URL as a typed sentinel error.
+- [x] T070 [US4] Rate-limit `/oauth/callback` — finalize the token-bucket from T043 to 20/min/IP per contract. Add metrics counter for denial rate (Phase N-friendly).
 - [ ] T071 [P] [US4] Integration test `test/integration/us4_tool_loop_test.go` — build-tag `integration`; uses a real Tavily key or `TAVILY_MOCK=1`; asserts a question triggers exactly one `web_search` call and the final card references the returned URLs.
 - [ ] T072 [P] [US4] Integration test `test/integration/us4_oauth_full_flow_test.go` — simulates a user visiting `/oauth/start` (signed), callback with a Feishu-mocked token response, verifies `UserOAuthCredential` stored encrypted and `feishu_doc_read` succeeds on subsequent call.
 
@@ -216,18 +216,18 @@ description: "Task list for 001-feishu-agent-bot implementation"
 
 ### Contract tests for User Story 5
 
-- [ ] T073 [P] [US5] Contract test `test/contract/us5_mcp_naming_test.go` — adapter prefixes all MCP tool names with `mcp__<server>__` and leaves input schemas unchanged (FR-061).
-- [ ] T074 [P] [US5] Contract test `test/contract/us5_mcp_isolation_test.go` — with one broken MCP server config (unreachable URL) and one working, verify `Manager.LoadAll` returns nil, `Status()` reports the broken one `Connected=false LastError != ""`, and the working server's tools are registered normally (FR-062).
+- [x] T073 [P] [US5] Contract test `test/contract/us5_mcp_naming_test.go` — adapter prefixes all MCP tool names with `mcp__<server>__` and leaves input schemas unchanged (FR-061).
+- [x] T074 [P] [US5] Contract test `test/contract/us5_mcp_isolation_test.go` — with one broken MCP server config (unreachable URL) and one working, verify `Manager.LoadAll` returns nil, `Status()` reports the broken one `Connected=false LastError != ""`, and the working server's tools are registered normally (FR-062).
 
 ### Implementation for User Story 5
 
-- [ ] T075 [US5] Flesh out `internal/mcp/client.go` with `mark3labs/mcp-go` wrappers for `Initialize` and `ListTools`.
-- [ ] T076 [P] [US5] Implement `internal/mcp/stdio.go` — spawn subprocess, pipe stdio, `context.Context`-scoped. On process exit, mark server `disconnected`; optional restart policy deferred to open item O5 (M7/Polish).
-- [ ] T077 [P] [US5] Implement `internal/mcp/http.go` — HTTP + SSE transports via mcp-go.
-- [ ] T078 [US5] Complete `internal/mcp/adapter.go` — convert `mcp.Tool` schemas pass-through into `tool.Tool`; wire `Call` to route via the backing client; `Available()` reflects `Status().Connected`.
-- [ ] T079 [US5] Complete `internal/mcp/manager.go` — `LoadAll` iterates configs, per-server init with its own timeout, aggregates into registry, never returns an error for per-server failures (logs + status instead).
-- [ ] T080 [US5] Wire `Manager.Tools()` into the tool registry at startup in `cmd/bot/main.go`, with a hot-fail pattern: if Redis or LLM fail, abort; if all MCP servers fail, log and continue. Edit T046/T068.
-- [ ] T081 [P] [US5] Integration test `test/integration/us5_mcp_filesystem_test.go` — spins up `npx @modelcontextprotocol/server-filesystem` against a tempdir, invokes `mcp__filesystem__list_directory` through the agent loop (real mcp-go, real subprocess). Skipped if `npx` not available.
+- [x] T075 [US5] Flesh out `internal/mcp/client.go` with `mark3labs/mcp-go` wrappers for `Initialize` and `ListTools`.
+- [x] T076 [P] [US5] Implement `internal/mcp/stdio.go` — spawn subprocess, pipe stdio, `context.Context`-scoped. On process exit, mark server `disconnected`; optional restart policy deferred to open item O5 (M7/Polish).
+- [x] T077 [P] [US5] Implement `internal/mcp/http.go` — HTTP + SSE transports via mcp-go.
+- [x] T078 [US5] Complete `internal/mcp/adapter.go` — convert `mcp.Tool` schemas pass-through into `tool.Tool`; wire `Call` to route via the backing client; `Available()` reflects `Status().Connected`.
+- [x] T079 [US5] Complete `internal/mcp/manager.go` — `LoadAll` iterates configs, per-server init with its own timeout, aggregates into registry, never returns an error for per-server failures (logs + status instead).
+- [x] T080 [US5] Wire `Manager.Tools()` into the tool registry at startup in `cmd/bot/main.go`, with a hot-fail pattern: if Redis or LLM fail, abort; if all MCP servers fail, log and continue. Edit T046/T068.
+- [x] T081 [P] [US5] Integration test `test/integration/us5_mcp_filesystem_test.go` — spins up `npx @modelcontextprotocol/server-filesystem` against a tempdir, invokes `mcp__filesystem__list_directory` through the agent loop (real mcp-go, real subprocess). Skipped if `npx` not available.
 
 **Checkpoint**: Operators can extend bot capabilities without code changes. All user stories functional.
 
@@ -253,13 +253,13 @@ description: "Task list for 001-feishu-agent-bot implementation"
 ### Tests & quality
 
 - [ ] T089 [P] Unit tests for every remaining public function under `internal/config`, `internal/log`, `internal/render/state.go` — get line coverage ≥ 70 % for the `internal/` tree.
-- [ ] T090 [P] Run `go vet ./...` and `gofmt -l .` in CI; fail build on any output. Extend Makefile `fmt-check`.
+- [x] T090 [P] Run `go vet ./...` and `gofmt -l .` in CI; fail build on any output. Extend Makefile `fmt-check`.
 - [ ] T091 Run the full quickstart.md §6 smoke test against a real staging Feishu app. Record pass/fail for each of steps 1–6.
 
 ### Docs & deploy
 
-- [ ] T092 [P] Finalize Dockerfile (T009) — distroless runtime, non-root user, healthcheck hitting `/healthz`.
-- [ ] T093 [P] Expand `README.md` with deployment notes: required env vars, reverse-proxy recipe (Caddy snippet for TLS termination in front of `/oauth/*`), Redis sizing.
+- [x] T092 [P] Finalize Dockerfile (T009) — distroless runtime, non-root user, healthcheck hitting `/healthz`.
+- [x] T093 [P] Expand `README.md` with deployment notes: required env vars, reverse-proxy recipe (Caddy snippet for TLS termination in front of `/oauth/*`), Redis sizing.
 - [ ] T094 Run `/speckit.constitution` (recommended in plan.md Constitution Check) to codify the load-bearing invariants (no-secrets-in-logs, tool-failures-recovered, user-data-encrypted).
 
 ---

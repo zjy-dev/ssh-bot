@@ -33,6 +33,19 @@ type Result struct {
 	Meta    map[string]any
 }
 
+// UserError is an error whose message is already suitable to surface back to
+// the model/user as-is.
+type UserError interface {
+	error
+	UserMessage() string
+}
+
+// SimpleUserError is the common one-line implementation of UserError.
+type SimpleUserError string
+
+func (e SimpleUserError) Error() string       { return string(e) }
+func (e SimpleUserError) UserMessage() string { return string(e) }
+
 // Tool is one invocable capability.
 type Tool interface {
 	Name() string

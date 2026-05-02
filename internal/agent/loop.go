@@ -276,7 +276,11 @@ func (a *Agent) execOne(parent context.Context, c llm.ToolCall) (res toolResult)
 	r, err := t.Call(ctx, c.Arguments)
 	if err != nil {
 		res.IsError = true
-		res.Content = "tool error: " + err.Error()
+		if uerr, ok := err.(tool.UserError); ok {
+			res.Content = uerr.UserMessage()
+		} else {
+			res.Content = "tool error: " + err.Error()
+		}
 		return
 	}
 	res.Content = r.Content

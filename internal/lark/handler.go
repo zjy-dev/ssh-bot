@@ -3,9 +3,7 @@ package lark
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/anomalyco/ssh-bot/internal/agent"
@@ -19,6 +17,16 @@ import (
 // LockTTL is the TTL on the per-user lock while a turn is in progress (D6).
 const LockTTL = 60 * time.Second
 
+// MessageSender is the subset of the Feishu sender that the handler and
+// renderer need. It is intentionally interface-shaped so contract tests can
+// drive Handler with a fake sender.
+type MessageSender interface {
+	SendInitialCard(ctx context.Context, chatID string) (string, error)
+	SendMessage(ctx context.Context, chatID, text string) error
+	Patch(ctx context.Context, messageID string, cardJSON []byte) error
+	ReplyInThread(ctx context.Context, rootMessageID, text string) error
+}
+
 // Handler is the entry point for every inbound Feishu message event.
 // It:
 //   - ignores non-@-messages in groups (FR-001),
@@ -29,7 +37,7 @@ const LockTTL = 60 * time.Second
 type Handler struct {
 	Store      session.Store
 	Locker     session.Locker
-	Sender     *Sender
+	Sender     MessageSender
 	Registry   *tool.Registry
 	LLMs       *llm.Registry
 	BotOpenID  string
@@ -46,7 +54,7 @@ type Handler struct {
 func NewHandler(
 	store session.Store,
 	locker session.Locker,
-	sender *Sender,
+	sender MessageSender,
 	registry *tool.Registry,
 	llms *llm.Registry,
 	botOpenID string,
@@ -76,6 +84,7 @@ func (h *Handler) Handle(ctx context.Context, ev *MessageEvent) error {
 	}
 	traceID := log.NewTraceID()
 	ctx = log.WithTrace(ctx, traceID)
+	ctx = tool.WithCallerOpenID(ctx, ev.SenderOpenID)
 	logger := log.FromContext(ctx, h.Logger)
 
 	logger.Info("lark: event received",
@@ -94,9 +103,13 @@ func (h *Handler) Handle(ctx context.Context, ev *MessageEvent) error {
 		return nil
 	}
 
-	// Gate 3: command interception (FR-020, FR-021).
-	if IsCommand(ev.Text) {
-		return h.handleCommand(ctx, ev)
+	// Gate 3: command interception (FR-020, FR-021). Commands execute before
+	// lock acquisition and before any session mutation.
+	if res, handled := h.dispatchCommand(ctx, ev); handled {
+		if res == nil || res.Text == "" {
+			return nil
+		}
+		return h.Sender.SendMessage(ctx, ev.ChatID, res.Text)
 	}
 
 	// Gate 4: acquire per-user lock (FR-012).
@@ -104,12 +117,12 @@ func (h *Handler) Handle(ctx context.Context, ev *MessageEvent) error {
 	token, ok, err := h.Locker.TryAcquire(ctx, key, LockTTL)
 	if err != nil {
 		logger.Error("lark: lock error", "err", err.Error())
-		_ = h.Sender.SendPlainCard(ctx, ev.ChatID, "⚠️ 服务暂时不可用，请稍后重试。")
+		_ = h.Sender.SendMessage(ctx, ev.ChatID, "⚠️ 服务暂时不可用，请稍后重试。")
 		return err
 	}
 	if !ok {
 		logger.Info("lark: concurrent message rejected (lock held)")
-		_ = h.Sender.SendPlainCard(ctx, ev.ChatID, "⏳ 上一条还在处理中，请稍候再发。")
+		_ = h.Sender.SendMessage(ctx, ev.ChatID, "⏳ 上一条还在处理中，请稍候再发。")
 		return nil
 	}
 	defer func() {
@@ -122,7 +135,7 @@ func (h *Handler) Handle(ctx context.Context, ev *MessageEvent) error {
 	sess, err := h.Store.Get(ctx, key)
 	if err != nil {
 		logger.Error("lark: session get", "err", err.Error())
-		_ = h.Sender.SendPlainCard(ctx, ev.ChatID, "⚠️ 服务暂时不可用，请稍后重试。")
+		_ = h.Sender.SendMessage(ctx, ev.ChatID, "⚠️ 服务暂时不可用，请稍后重试。")
 		return err
 	}
 	if sess == nil {
@@ -141,7 +154,7 @@ func (h *Handler) Handle(ctx context.Context, ev *MessageEvent) error {
 	prov, ok := h.LLMs.Resolve(sess.Provider)
 	if !ok || prov == nil {
 		logger.Error("lark: no provider available", "alias", sess.Provider)
-		_ = h.Sender.SendPlainCard(ctx, ev.ChatID, "⚠️ 当前没有可用的 AI 模型，请联系管理员。")
+		_ = h.Sender.SendMessage(ctx, ev.ChatID, "⚠️ 当前没有可用的 AI 模型，请联系管理员。")
 		return errors.New("no provider available")
 	}
 
@@ -211,100 +224,6 @@ func (h *Handler) Handle(ctx context.Context, ev *MessageEvent) error {
 	}
 
 	return nil
-}
-
-// handleCommand handles /clear, /help, /model, /tools, /whoami. No LLM calls,
-// no session history mutation (the commands either wipe state or just read).
-func (h *Handler) handleCommand(ctx context.Context, ev *MessageEvent) error {
-	cmd := strings.TrimSpace(ev.Text)
-	logger := log.FromContext(ctx, h.Logger)
-
-	switch {
-	case cmd == "/clear":
-		if err := h.Store.Delete(ctx, SessionKey(ev)); err != nil {
-			logger.Warn("command /clear delete failed", "err", err.Error())
-			return h.Sender.SendPlainCard(ctx, ev.ChatID, "⚠️ 清空失败，请稍后重试。")
-		}
-		return h.Sender.SendPlainCard(ctx, ev.ChatID, "✅ 已清空上下文。")
-
-	case cmd == "/help":
-		return h.Sender.SendPlainCard(ctx, ev.ChatID, helpText(h.Registry, h.LLMs))
-
-	case strings.HasPrefix(cmd, "/model"):
-		arg := strings.TrimSpace(strings.TrimPrefix(cmd, "/model"))
-		if arg == "" {
-			return h.Sender.SendPlainCard(ctx, ev.ChatID, modelListText(h.LLMs))
-		}
-		if _, ok := h.LLMs.Get(arg); !ok {
-			msg := fmt.Sprintf("⚠️ 未知模型 `%s`。\n\n%s", arg, modelListText(h.LLMs))
-			return h.Sender.SendPlainCard(ctx, ev.ChatID, msg)
-		}
-		sess, _ := h.Store.Get(ctx, SessionKey(ev))
-		if sess == nil {
-			sess = &session.Session{
-				Key:        SessionKey(ev),
-				UserOpenID: ev.SenderOpenID,
-				ChatID:     ev.ChatID,
-				ChatType:   ev.ChatType,
-			}
-		}
-		sess.Provider = arg
-		if err := h.Store.Save(ctx, sess.Key, sess); err != nil {
-			return err
-		}
-		return h.Sender.SendPlainCard(ctx, ev.ChatID, fmt.Sprintf("✅ 已切换模型为 `%s`。", arg))
-
-	case cmd == "/tools":
-		return h.Sender.SendPlainCard(ctx, ev.ChatID, toolsListText(h.Registry))
-
-	case cmd == "/whoami":
-		msg := fmt.Sprintf("session_key: `%s`\nopen_id: `%s`\nchat_type: `%s`",
-			SessionKey(ev), ev.SenderOpenID, ev.ChatType)
-		return h.Sender.SendPlainCard(ctx, ev.ChatID, msg)
-
-	default:
-		return h.Sender.SendPlainCard(ctx, ev.ChatID,
-			fmt.Sprintf("未知命令 `%s`。输入 `/help` 查看可用命令。", cmd))
-	}
-}
-
-func helpText(reg *tool.Registry, llms *llm.Registry) string {
-	var sb strings.Builder
-	sb.WriteString("**可用指令**\n")
-	sb.WriteString("- `/clear` 清空当前对话上下文\n")
-	sb.WriteString("- `/help` 显示此帮助\n")
-	sb.WriteString("- `/model <别名>` 切换 AI 模型\n")
-	sb.WriteString("- `/tools` 列出可用工具\n")
-	sb.WriteString("- `/whoami` 显示当前会话标识（调试用）\n\n")
-	sb.WriteString(modelListText(llms))
-	sb.WriteString("\n\n")
-	sb.WriteString(toolsListText(reg))
-	return sb.String()
-}
-
-func modelListText(llms *llm.Registry) string {
-	names := llms.Names()
-	if len(names) == 0 {
-		return "**可用模型**：_无_"
-	}
-	return "**可用模型**：" + "`" + strings.Join(names, "`、`") + "`"
-}
-
-func toolsListText(reg *tool.Registry) string {
-	tools := reg.List()
-	if len(tools) == 0 {
-		return "**可用工具**：_无_"
-	}
-	var sb strings.Builder
-	sb.WriteString("**可用工具**\n")
-	for _, t := range tools {
-		mark := "✅"
-		if !t.Available() {
-			mark = "⚠️"
-		}
-		fmt.Fprintf(&sb, "- %s `%s` (%s)\n", mark, t.Name(), t.Source())
-	}
-	return sb.String()
 }
 
 func userFacingRunError(err error) string {
