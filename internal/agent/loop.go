@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +26,10 @@ const (
 // within MaxSteps. The renderer surfaces this to the user as
 // "已达到推理步数上限（12 步），请拆解问题后重试".
 var ErrMaxStepsReached = errors.New("agent: reached max steps")
+
+// ErrEmptyAssistantResponse is returned when the provider ends a turn without
+// any visible assistant text and without requesting any tools.
+var ErrEmptyAssistantResponse = errors.New("agent: empty assistant response")
 
 // EmitFn is the event sink passed by the caller (typically the renderer).
 //
@@ -143,6 +148,11 @@ func (a *Agent) Run(ctx context.Context, sess *session.Session, userInput string
 						Name:      pc.name,
 						Arguments: json.RawMessage(pc.args),
 					})
+				}
+				if len(asst.ToolCalls) == 0 && strings.TrimSpace(asst.Content) == "" {
+					emptyErr := ErrEmptyAssistantResponse
+					emit(llm.StreamEvent{Type: llm.EventError, Err: emptyErr})
+					return emptyErr
 				}
 				sess.Messages = append(sess.Messages, asst)
 				if err := a.saveSession(ctx, sess); err != nil {

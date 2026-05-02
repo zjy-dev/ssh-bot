@@ -193,8 +193,7 @@ func (h *Handler) Handle(ctx context.Context, ev *MessageEvent) error {
 	if runErr != nil {
 		userMsg := userFacingRunError(runErr)
 		// Final flush with error state.
-		r.State().ErrorText = userMsg
-		r.State().MarkDone()
+		r.State().MarkError(userMsg)
 		_ = r.Stop(ctx, mid)
 		// If the agent produced nothing, also drop a plain reply so the user
 		// isn't looking at a stale "思考中" card.
@@ -220,6 +219,9 @@ func (h *Handler) Handle(ctx context.Context, ev *MessageEvent) error {
 func userFacingRunError(err error) string {
 	if errors.Is(err, agent.ErrMaxStepsReached) {
 		return "已达到推理步数上限（12 步），请拆解问题后重试。"
+	}
+	if errors.Is(err, agent.ErrEmptyAssistantResponse) {
+		return "模型返回了空响应，请稍后重试。"
 	}
 	// Default user-facing wording; internal details stay in logs.
 	return "处理过程中出错了，请稍后重试。"

@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/anomalyco/ssh-bot/internal/agent"
 	"github.com/anomalyco/ssh-bot/internal/lark"
 	"github.com/anomalyco/ssh-bot/internal/llm"
 	"github.com/anomalyco/ssh-bot/internal/session"
@@ -109,4 +110,32 @@ func TestUS2_P2PLongStreamDoesNotDropTextUnderBackpressure(t *testing.T) {
 	sender.mu.Unlock()
 	require.Contains(t, string(last), want.String())
 	require.Less(t, sender.PatchCount(), 300, "batched rendering should avoid patching once per chunk")
+}
+
+func TestUS2_P2PEmptyMessageEndShowsErrorCard(t *testing.T) {
+	store := session.NewMemoryStore()
+	sender := newFakeSender()
+	provider := &countingProvider{name: "claude", events: []llm.StreamEvent{{Type: llm.EventMessageEnd}}}
+	h := newHandlerForTest(store, unlockedLocker{}, sender, mustRegistry(builtin.NewDatetime()), newLLMRegistry(provider))
+
+	err := h.Handle(context.Background(), &lark.MessageEvent{
+		ChatID:       "oc_p2p_empty",
+		ChatType:     "p2p",
+		SenderOpenID: "ou_empty",
+		MessageID:    "m_empty",
+		Text:         "你好",
+	})
+	require.ErrorIs(t, err, agent.ErrEmptyAssistantResponse)
+
+	sender.mu.Lock()
+	require.NotEmpty(t, sender.patchedBodies)
+	last := sender.patchedBodies[len(sender.patchedBodies)-1]
+	sender.mu.Unlock()
+	require.Contains(t, string(last), "AI 助手（遇到问题）")
+	require.Contains(t, string(last), "模型返回了空响应，请稍后重试。")
+
+	sess, getErr := store.Get(context.Background(), "p2p:ou_empty")
+	require.NoError(t, getErr)
+	require.NotNil(t, sess)
+	require.Len(t, sess.Messages, 1, "empty assistant response must not be persisted")
 }

@@ -244,3 +244,18 @@ func TestAgentLoop_ErrorPropagates(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, strings.Contains(err.Error(), "upstream boom"))
 }
+
+func TestAgentLoop_EmptyMessageEndIsError(t *testing.T) {
+	prov := llm.NewFakeProvider("fake", [][]llm.StreamEvent{{{Type: llm.EventMessageEnd}}})
+	a := agent.NewAgent(prov, tool.NewRegistry(), session.NewMemoryStore())
+	sess := newSession()
+
+	var types []llm.StreamEventType
+	err := a.Run(context.Background(), sess, "hi", func(ev llm.StreamEvent) {
+		types = append(types, ev.Type)
+	})
+
+	require.ErrorIs(t, err, agent.ErrEmptyAssistantResponse)
+	require.Contains(t, types, llm.EventError)
+	require.Len(t, sess.Messages, 1, "empty assistant response must not be saved")
+}

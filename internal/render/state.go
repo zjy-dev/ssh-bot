@@ -149,6 +149,16 @@ func (s *State) MarkDone() {
 	s.Phase = PhaseDone
 }
 
+// MarkError switches the state to the terminal error card.
+func (s *State) MarkError(msg string) {
+	s.Phase = PhaseError
+	if strings.TrimSpace(msg) == "" {
+		s.ErrorText = "unknown error"
+		return
+	}
+	s.ErrorText = msg
+}
+
 // Snapshot returns a deep-copied snapshot suitable for non-blocking render.
 // Only fields used by render.go#buildCardJSON are copied.
 func (s *State) Snapshot() *StateSnapshot {
