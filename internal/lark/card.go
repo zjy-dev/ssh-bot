@@ -20,19 +20,13 @@ func InitialCardJSON() []byte {
 // PlainTextCardJSON builds a minimal card carrying a single markdown string.
 // Used for command replies (/clear, /help, etc.).
 func PlainTextCardJSON(text string) []byte {
-	text = render.NormalizeLarkMarkdown(text)
 	body := map[string]any{
 		"config": map[string]any{"update_multi": true, "wide_screen_mode": true},
 		"header": map[string]any{
 			"template": "blue",
 			"title":    map[string]any{"tag": "plain_text", "content": "AI 助手"},
 		},
-		"elements": []any{
-			map[string]any{
-				"tag":  "div",
-				"text": map[string]any{"tag": "lark_md", "content": text},
-			},
-		},
+		"elements": render.BuildLarkTextElements(text),
 	}
 	raw, _ := jsonMarshal(body)
 	return raw

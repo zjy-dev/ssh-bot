@@ -119,7 +119,7 @@ func (t *webFetchTool) Call(ctx context.Context, args json.RawMessage) (tool.Res
 	if len(content) > req.MaxChars {
 		content = content[:req.MaxChars] + fmt.Sprintf("\n[truncated %d chars]", len(content)-req.MaxChars)
 	}
-	return tool.Result{Content: fmt.Sprintf("## %s\n\n%s", article.Title(), content)}, nil
+	return tool.Result{Content: fmt.Sprintf("Title: %s\n\n%s", article.Title(), content)}, nil
 }
 
 func (t *webFetchTool) rejectPrivateTarget(ctx context.Context, host string) error {

@@ -98,7 +98,7 @@ func (t *feishuDocReadTool) Call(ctx context.Context, args json.RawMessage) (too
 	if err != nil {
 		return tool.Result{}, err
 	}
-	return tool.Result{Content: fmt.Sprintf("## %s\n\n%s", title, truncateDoc(content, 20000))}, nil
+	return tool.Result{Content: fmt.Sprintf("Title: %s\n\n%s", title, truncateDoc(content, 20000))}, nil
 }
 
 func (t *feishuDocSearchTool) Call(ctx context.Context, args json.RawMessage) (tool.Result, error) {
