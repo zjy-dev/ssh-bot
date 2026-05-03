@@ -50,13 +50,13 @@ func renderBlock(node gast.Node, source []byte, ctx markdownRenderContext) strin
 		if text == "" {
 			return ""
 		}
-		return "**" + text + "**"
+		return formatSectionHeading(text)
 	case *gast.Blockquote:
 		body := renderBlockChildren(n, source, ctx)
 		if body == "" {
 			return ""
 		}
-		return prefixLines(body, "> ", ">")
+		return prefixLines(body, "▍ ", "▍ ")
 	case *gast.FencedCodeBlock:
 		return renderCodeBlock(strings.TrimSpace(string(n.Language(source))), string(n.Lines().Value(source)))
 	case *gast.CodeBlock:
@@ -113,10 +113,7 @@ func renderInline(node gast.Node, source []byte) string {
 		return string(n.Text(source))
 	case *gast.CodeSpan:
 		text := strings.TrimSpace(string(n.Text(source)))
-		if text == "" {
-			return "``"
-		}
-		return "`" + text + "`"
+		return formatInlineCode(text)
 	case *gast.Emphasis:
 		inner := renderInlineChildren(n, source)
 		marker := "*"
@@ -179,10 +176,7 @@ func renderPlainInline(node gast.Node, source []byte) string {
 		return string(n.Text(source))
 	case *gast.CodeSpan:
 		text := strings.TrimSpace(string(n.Text(source)))
-		if text == "" {
-			return ""
-		}
-		return "`" + text + "`"
+		return formatInlineCode(text)
 	case *gast.Link:
 		inner := normalizeInlineWhitespace(renderPlainInlineChildren(n, source))
 		if inner != "" {
@@ -251,7 +245,7 @@ func renderList(list *gast.List, source []byte, ctx markdownRenderContext) strin
 
 func renderListItem(item *gast.ListItem, ordered bool, index int, source []byte, ctx markdownRenderContext) string {
 	baseIndent := strings.Repeat("  ", ctx.listDepth)
-	marker := "- "
+	marker := listBullet(ctx.listDepth)
 	if ordered {
 		marker = fmt.Sprintf("%d. ", index)
 	}
@@ -328,7 +322,7 @@ func renderTableCells(parent gast.Node, source []byte) string {
 	if len(cells) == 0 {
 		return ""
 	}
-	return "- " + strings.Join(cells, " | ")
+	return listBullet(0) + strings.Join(cells, " | ")
 }
 
 func renderDefinitionList(list *extast.DefinitionList, source []byte) string {
@@ -347,18 +341,18 @@ func renderDefinitionList(list *extast.DefinitionList, source []byte) string {
 			switch {
 			case label == "" && desc == "":
 			case label == "":
-				items = append(items, "- "+desc)
+				items = append(items, listBullet(0)+desc)
 			case desc == "":
-				items = append(items, "- "+label)
+				items = append(items, listBullet(0)+label)
 			default:
-				items = append(items, "- "+label+": "+desc)
+				items = append(items, listBullet(0)+label+": "+desc)
 			}
 			terms = terms[:0]
 		}
 	}
 	for _, term := range terms {
 		if term != "" {
-			items = append(items, "- "+term)
+			items = append(items, listBullet(0)+term)
 		}
 	}
 	return strings.Join(filterEmpty(items), "\n")
@@ -424,4 +418,128 @@ func isListLike(node gast.Node) bool {
 	default:
 		return false
 	}
+}
+
+// BuildLarkTextElements renders Markdown into a Feishu-card-friendly sequence
+// of card elements instead of one large lark_md blob. This avoids relying on
+// Feishu to understand markdown headings/lists/inline code syntax.
+func BuildLarkTextElements(input string) []any {
+	input = normalizeNewlines(input)
+	if strings.TrimSpace(input) == "" {
+		return nil
+	}
+	if elements, err := buildLarkTextElementsAST(input); err == nil && len(elements) > 0 {
+		return elements
+	}
+	return fallbackLarkTextElements(NormalizeLarkMarkdown(input))
+}
+
+func buildLarkTextElementsAST(input string) (elements []any, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("render text elements panic: %v", r)
+		}
+	}()
+
+	source := []byte(input)
+	md := goldmark.New(goldmark.WithExtensions(gmext.GFM, gmext.DefinitionList))
+	doc := md.Parser().Parse(gmtext.NewReader(source))
+	for child := doc.FirstChild(); child != nil; child = child.NextSibling() {
+		elements = appendRenderedElements(elements, child, source, markdownRenderContext{})
+	}
+	return compactElements(elements), nil
+}
+
+func appendRenderedElements(elements []any, node gast.Node, source []byte, ctx markdownRenderContext) []any {
+	switch n := node.(type) {
+	case *gast.Heading:
+		if len(elements) > 0 {
+			elements = append(elements, map[string]any{"tag": "hr"})
+		}
+		return append(elements, markdownDiv(formatSectionHeading(renderPlainInlineChildren(n, source))))
+	case *gast.Paragraph:
+		return appendTextBlock(elements, renderInlineChildren(n, source), false)
+	case *gast.List:
+		return appendLineBlocks(elements, renderList(n, source, ctx), false)
+	case *gast.Blockquote:
+		return appendTextBlock(elements, renderBlock(n, source, ctx), false)
+	case *gast.FencedCodeBlock, *gast.CodeBlock:
+		return appendTextBlock(elements, renderBlock(node, source, ctx), true)
+	case *gast.ThematicBreak:
+		return append(elements, map[string]any{"tag": "hr"})
+	case *extast.Table, *extast.DefinitionList:
+		return appendLineBlocks(elements, renderBlock(node, source, ctx), false)
+	default:
+		return appendTextBlock(elements, renderBlock(node, source, ctx), false)
+	}
+}
+
+func appendLineBlocks(elements []any, block string, preserveCode bool) []any {
+	for _, line := range strings.Split(cleanupRenderedMarkdown(block), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		elements = appendTextBlock(elements, line, preserveCode)
+	}
+	return elements
+}
+
+func appendTextBlock(elements []any, text string, preserveCode bool) []any {
+	text = cleanupRenderedMarkdown(text)
+	if text == "" {
+		return elements
+	}
+	elements = append(elements, markdownDivWithMode(text, preserveCode))
+	return elements
+}
+
+func fallbackLarkTextElements(text string) []any {
+	text = cleanupRenderedMarkdown(text)
+	if text == "" {
+		return nil
+	}
+	parts := strings.Split(text, "\n\n")
+	items := make([]any, 0, len(parts))
+	for _, part := range parts {
+		part = cleanupRenderedMarkdown(part)
+		if part == "" {
+			continue
+		}
+		items = append(items, markdownDivWithMode(part, false))
+	}
+	return items
+}
+
+func markdownDiv(text string) map[string]any {
+	return markdownDivWithMode(text, false)
+}
+
+func markdownDivWithMode(text string, preserveCode bool) map[string]any {
+	text = cleanupRenderedMarkdown(text)
+	if !preserveCode {
+		text = normalizeCompatibleEmoji(text)
+	}
+	return map[string]any{
+		"tag":  "div",
+		"text": map[string]any{"tag": "lark_md", "content": text},
+	}
+}
+
+func compactElements(elements []any) []any {
+	for len(elements) > 0 {
+		first, ok := elements[0].(map[string]any)
+		if !ok || first["tag"] != "hr" {
+			break
+		}
+		elements = elements[1:]
+	}
+	for len(elements) > 0 {
+		last, ok := elements[len(elements)-1].(map[string]any)
+		if !ok || last["tag"] != "hr" {
+			break
+		}
+		elements = elements[:len(elements)-1]
+	}
+	return elements
 }

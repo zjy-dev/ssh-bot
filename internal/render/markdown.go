@@ -14,6 +14,22 @@ var (
 	mdTableSplitRE = regexp.MustCompile(`^\s*\|?(?:\s*:?-+:?\s*\|)+\s*:?-+:?\s*\|?\s*$`)
 )
 
+var emojiCompatReplacer = strings.NewReplacer(
+	"✔️", "✅",
+	"✔", "✅",
+	"✖️", "❌",
+	"✖", "❌",
+	"❗", "⚠️",
+	"⚡", "💡",
+	"✨", "💡",
+	"👉", "•",
+	"📍", "📌",
+	"🟢", "✅",
+	"🔴", "❌",
+	"🟡", "⚠️",
+	"⌛", "⏳",
+)
+
 // NormalizeLarkMarkdown converts general-purpose Markdown into the lark_md
 // subset that Feishu cards render reliably. It prefers an AST-based conversion
 // and falls back to a line-based downgrader if parsing/rendering fails.
@@ -110,4 +126,40 @@ func cleanupRenderedMarkdown(input string) string {
 	joined := strings.Join(lines, "\n")
 	joined = blankLineRunRE.ReplaceAllString(joined, "\n\n")
 	return strings.TrimSpace(joined)
+}
+
+func normalizeCompatibleEmoji(input string) string {
+	if input == "" {
+		return ""
+	}
+	return emojiCompatReplacer.Replace(input)
+}
+
+func formatSectionHeading(text string) string {
+	text = normalizeInlineWhitespace(text)
+	if text == "" {
+		return ""
+	}
+	return "**【" + normalizeCompatibleEmoji(text) + "】**"
+}
+
+func formatInlineCode(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "「」"
+	}
+	text = strings.ReplaceAll(text, "「", "[")
+	text = strings.ReplaceAll(text, "」", "]")
+	return "「" + text + "」"
+}
+
+func listBullet(depth int) string {
+	switch depth {
+	case 0:
+		return "• "
+	case 1:
+		return "◦ "
+	default:
+		return "▪ "
+	}
 }

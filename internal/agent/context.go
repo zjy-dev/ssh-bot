@@ -32,7 +32,19 @@ func composeSystem(preamble string, reg *tool.Registry) string {
 	} else {
 		b.WriteString("You are an AI assistant running inside a Feishu (Lark) chat. Answer in the user's language. Prefer concise, well-formatted markdown. When a tool is appropriate, call it; do not guess time-sensitive facts.")
 	}
-	b.WriteString("\n\nFormatting constraints for Feishu cards: output only Feishu-compatible markdown (lark_md subset). Do not use markdown headings that start with #; use bold section titles like **结论** instead. Prefer short paragraphs and bullet lists. Avoid HTML tags and markdown tables.")
+	b.WriteString("\n\nFormatting constraints for Feishu cards: output only Feishu-compatible markdown (lark_md subset). Avoid HTML tags and markdown tables. Use inline code sparingly and only for identifiers or commands. Do not rely on fancy markdown features.")
+	b.WriteString("\n\nDefault answer style unless the user asks otherwise:")
+	b.WriteString("\n- Start with one direct answer sentence.")
+	b.WriteString("\n- Then give 2 to 4 short bullets only if they add value.")
+	b.WriteString("\n- Use at most 3 short sections.")
+	b.WriteString("\n- Keep each paragraph to 1 or 2 sentences.")
+	b.WriteString("\n- Avoid unnecessary blank lines and avoid many tiny sections.")
+	b.WriteString("\n- Do not add emojis unless they clearly help. If you use emojis, only use simple common Unicode emojis such as ✅ ❌ 💡 📌.")
+	b.WriteString("\n\nPreferred structure example:")
+	b.WriteString("\n结论：这是最关键的判断。")
+	b.WriteString("\n• 原因一：一句话说清。")
+	b.WriteString("\n• 原因二：一句话说清。")
+	b.WriteString("\n下一步：如果需要，再给一个明确动作。")
 	avail := reg.Available()
 	if len(avail) > 0 {
 		b.WriteString("\n\nAvailable tools:\n")

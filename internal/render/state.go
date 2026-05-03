@@ -252,14 +252,7 @@ func BuildCardJSON(s *StateSnapshot) ([]byte, error) {
 
 		// Text region.
 		if s.Text != "" {
-			body := NormalizeLarkMarkdown(s.Text)
-			elements = append(elements, map[string]any{
-				"tag": "div",
-				"text": map[string]any{
-					"tag":     "lark_md",
-					"content": body,
-				},
-			})
+			elements = append(elements, BuildLarkTextElements(s.Text)...)
 		} else if s.Phase == PhaseIdle {
 			elements = append(elements, map[string]any{
 				"tag": "div",
@@ -273,18 +266,11 @@ func BuildCardJSON(s *StateSnapshot) ([]byte, error) {
 		// Tool-call region.
 		if len(s.Tools) > 0 {
 			elements = append(elements, map[string]any{"tag": "hr"})
-			var sb strings.Builder
-			sb.WriteString("🔧 **工具调用**\n")
+			elements = append(elements, markdownDiv("🔧 **工具调用**"))
 			for _, t := range s.Tools {
-				fmt.Fprintf(&sb, "- `%s(%s)` %s\n", t.Name, t.ArgsPrev, t.Status())
+				line := listBullet(0) + formatInlineCode(fmt.Sprintf("%s(%s)", t.Name, t.ArgsPrev)) + " " + normalizeCompatibleEmoji(t.Status())
+				elements = append(elements, markdownDiv(line))
 			}
-			elements = append(elements, map[string]any{
-				"tag": "div",
-				"text": map[string]any{
-					"tag":     "lark_md",
-					"content": sb.String(),
-				},
-			})
 		}
 
 		// Footer on terminal phases.
