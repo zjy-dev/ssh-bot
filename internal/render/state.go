@@ -228,11 +228,12 @@ func BuildCardJSON(s *StateSnapshot) ([]byte, error) {
 	} else {
 		// Thinking region (only while still reasoning).
 		if s.Thinking != "" && !s.ThinkingDone {
+			thinking := NormalizeLarkPreview(truncate(s.Thinking, 300))
 			elements = append(elements, map[string]any{
 				"tag": "div",
 				"text": map[string]any{
 					"tag":     "lark_md",
-					"content": fmt.Sprintf("💭 **思考中...**\n> %s", truncate(s.Thinking, 300)),
+					"content": fmt.Sprintf("💭 **思考中...**\n%s", quoteMarkdownLines(thinking)),
 				},
 			})
 			elements = append(elements, map[string]any{"tag": "hr"})
@@ -251,11 +252,12 @@ func BuildCardJSON(s *StateSnapshot) ([]byte, error) {
 
 		// Text region.
 		if s.Text != "" {
+			body := NormalizeLarkMarkdown(s.Text)
 			elements = append(elements, map[string]any{
 				"tag": "div",
 				"text": map[string]any{
 					"tag":     "lark_md",
-					"content": s.Text,
+					"content": body,
 				},
 			})
 		} else if s.Phase == PhaseIdle {

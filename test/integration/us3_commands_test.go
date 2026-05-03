@@ -26,11 +26,18 @@ func (p *noopProvider) Stream(context.Context, llm.ChatRequest) (<-chan llm.Stre
 	return ch, nil
 }
 
-type commandSender struct{ messages []string }
+type commandSender struct {
+	messages   []string
+	plainCards []string
+}
 
 func (s *commandSender) SendInitialCard(context.Context, string) (string, error) { return "", nil }
 func (s *commandSender) SendMessage(_ context.Context, _ string, text string) error {
 	s.messages = append(s.messages, text)
+	return nil
+}
+func (s *commandSender) SendPlainCard(_ context.Context, _ string, text string) error {
+	s.plainCards = append(s.plainCards, text)
 	return nil
 }
 func (s *commandSender) Patch(context.Context, string, []byte) error         { return nil }
@@ -57,12 +64,13 @@ func TestUS3_CommandsNeverInvokeProvider(t *testing.T) {
 	}
 
 	require.Equal(t, 0, provider.calls)
-	require.Len(t, sender.messages, len(commands))
-	require.Contains(t, sender.messages[0], "可用指令")
-	require.Contains(t, sender.messages[1], "web_search")
-	require.Contains(t, sender.messages[2], "session_key")
-	require.Contains(t, sender.messages[3], "claude")
-	require.Contains(t, sender.messages[4], "已清空上下文")
+	require.Len(t, sender.plainCards, len(commands))
+	require.Empty(t, sender.messages)
+	require.Contains(t, sender.plainCards[0], "可用指令")
+	require.Contains(t, sender.plainCards[1], "web_search")
+	require.Contains(t, sender.plainCards[2], "session_key")
+	require.Contains(t, sender.plainCards[3], "claude")
+	require.Contains(t, sender.plainCards[4], "已清空上下文")
 }
 
 type integrationListTool struct{ name string }

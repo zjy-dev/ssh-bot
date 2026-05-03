@@ -119,6 +119,47 @@ func TestRenderer_ThinkingCollapsesOnFirstText(t *testing.T) {
 	require.Contains(t, string(last), "Final answer.")
 }
 
+func TestRenderer_NormalizesUnsupportedMarkdown(t *testing.T) {
+	m := &mockSender{}
+	r := render.New(m, nil)
+
+	events := make(chan llm.StreamEvent, 2)
+	events <- llm.StreamEvent{Type: llm.EventTextDelta, Text: "#### 标题内容\n\n正文"}
+	events <- llm.StreamEvent{Type: llm.EventMessageEnd}
+	close(events)
+
+	require.NoError(t, r.Feed(context.Background(), "mid", events))
+	require.NoError(t, r.Stop(context.Background(), "mid"))
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	last := m.bodies[len(m.bodies)-1]
+	require.NotContains(t, string(last), "#### 标题内容")
+	require.Contains(t, string(last), "**标题内容**")
+	require.Contains(t, string(last), "正文")
+}
+
+func TestRenderer_PreservesCodeFences(t *testing.T) {
+	m := &mockSender{}
+	r := render.New(m, nil)
+
+	events := make(chan llm.StreamEvent, 2)
+	events <- llm.StreamEvent{Type: llm.EventTextDelta, Text: "```go\n#### not a heading\nfmt.Println(\"hi\")\n```"}
+	events <- llm.StreamEvent{Type: llm.EventMessageEnd}
+	close(events)
+
+	require.NoError(t, r.Feed(context.Background(), "mid", events))
+	require.NoError(t, r.Stop(context.Background(), "mid"))
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	last := string(m.bodies[len(m.bodies)-1])
+	require.Contains(t, last, "```go")
+	require.Contains(t, last, "#### not a heading")
+	require.Contains(t, last, "fmt.Println")
+	require.NotContains(t, last, "**not a heading**")
+}
+
 func TestRenderer_ToolLifecycleEntry(t *testing.T) {
 	m := &mockSender{}
 	r := render.New(m, nil)
