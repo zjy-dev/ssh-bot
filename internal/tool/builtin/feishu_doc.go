@@ -20,14 +20,20 @@ import (
 
 const feishuDocReadSchema = `{
   "type": "object",
+  "description": "Provide either a Feishu document URL or a document token.",
   "properties": {
-    "url":       {"type": "string", "format": "uri"},
-    "doc_token": {"type": "string"}
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "minLength": 1,
+      "description": "Full Feishu doc/docx URL pasted by the user."
+    },
+    "doc_token": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Document token such as doxcn... or doccn...."
+    }
   },
-  "oneOf": [
-    {"required": ["url"]},
-    {"required": ["doc_token"]}
-  ],
   "additionalProperties": false
 }`
 
