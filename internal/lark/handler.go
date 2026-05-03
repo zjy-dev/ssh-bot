@@ -27,6 +27,10 @@ type MessageSender interface {
 	ReplyInThread(ctx context.Context, rootMessageID, text string) error
 }
 
+type plainCardSender interface {
+	SendPlainCard(ctx context.Context, chatID, text string) error
+}
+
 // Handler is the entry point for every inbound Feishu message event.
 // It:
 //   - ignores non-@-messages in groups (FR-001),
@@ -108,6 +112,9 @@ func (h *Handler) Handle(ctx context.Context, ev *MessageEvent) error {
 	if res, handled := h.dispatchCommand(ctx, ev); handled {
 		if res == nil || res.Text == "" {
 			return nil
+		}
+		if sender, ok := h.Sender.(plainCardSender); ok {
+			return sender.SendPlainCard(ctx, ev.ChatID, res.Text)
 		}
 		return h.Sender.SendMessage(ctx, ev.ChatID, res.Text)
 	}

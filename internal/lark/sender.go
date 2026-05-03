@@ -95,17 +95,15 @@ func (s *Sender) Patch(ctx context.Context, messageID string, cardJSON []byte) e
 	return nil
 }
 
-// ReplyInThread posts a follow-up text message in the same thread as
-// rootMessageID. Used for splitting long bot answers across multiple messages
+// ReplyInThread posts a follow-up interactive card in the same thread as
+// rootMessageID so markdown keeps rendering consistently across long answers
 // (FR-034).
 func (s *Sender) ReplyInThread(ctx context.Context, rootMessageID, text string) error {
-	// Wrap as Feishu "text" content.
-	content, _ := jsonMarshalIndirect(map[string]string{"text": text})
 	req := larkim.NewReplyMessageReqBuilder().
 		MessageId(rootMessageID).
 		Body(larkim.NewReplyMessageReqBodyBuilder().
-			Content(string(content)).
-			MsgType(larkim.MsgTypeText).
+			Content(string(PlainTextCardJSON(text))).
+			MsgType(larkim.MsgTypeInteractive).
 			Build()).
 		Build()
 	resp, err := s.client.Im.Message.Reply(ctx, req)

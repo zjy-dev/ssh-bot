@@ -51,6 +51,7 @@ func (p *countingProvider) Calls() int {
 type fakeSender struct {
 	mu            sync.Mutex
 	textMessages  []string
+	plainCards    []string
 	initialCards  []string
 	threadReplies []string
 	patchedBodies [][]byte
@@ -72,6 +73,13 @@ func (s *fakeSender) SendMessage(_ context.Context, _ string, text string) error
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.textMessages = append(s.textMessages, text)
+	return nil
+}
+
+func (s *fakeSender) SendPlainCard(_ context.Context, _ string, text string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.plainCards = append(s.plainCards, text)
 	return nil
 }
 
@@ -98,6 +106,15 @@ func (s *fakeSender) LastText() string {
 		return ""
 	}
 	return s.textMessages[len(s.textMessages)-1]
+}
+
+func (s *fakeSender) LastPlainCard() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.plainCards) == 0 {
+		return ""
+	}
+	return s.plainCards[len(s.plainCards)-1]
 }
 
 func mustRegistry(tools ...tool.Tool) *tool.Registry {

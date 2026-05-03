@@ -29,7 +29,7 @@ func TestUS3_ClearShortCircuitsWithoutLLM(t *testing.T) {
 	require.Equal(t, 0, provider.Calls())
 	require.Equal(t, 0, locker.Calls(), "commands must run before lock acquisition")
 	require.Equal(t, 1, store.DeleteCalls())
-	require.Contains(t, sender.LastText(), "已清空上下文")
+	require.Contains(t, sender.LastPlainCard(), "已清空上下文")
 
 	got, err := baseStore.Get(context.Background(), seed.Key)
 	require.NoError(t, err)
@@ -47,8 +47,8 @@ func TestUS3_ModelInvalidReturnsListingWithoutLLM(t *testing.T) {
 	require.NoError(t, h.Handle(context.Background(), ev))
 	require.Equal(t, 0, provider.Calls())
 	require.Equal(t, 0, locker.Calls())
-	require.Contains(t, sender.LastText(), "未知模型")
-	require.Contains(t, sender.LastText(), "claude")
+	require.Contains(t, sender.LastPlainCard(), "未知模型")
+	require.Contains(t, sender.LastPlainCard(), "claude")
 }
 
 func TestUS3_ToolsListsAllRegisteredToolsWithoutLLM(t *testing.T) {
@@ -63,9 +63,9 @@ func TestUS3_ToolsListsAllRegisteredToolsWithoutLLM(t *testing.T) {
 	require.NoError(t, h.Handle(context.Background(), ev))
 	require.Equal(t, 0, provider.Calls())
 	require.Equal(t, 0, locker.Calls())
-	require.Contains(t, sender.LastText(), "datetime")
-	require.Contains(t, sender.LastText(), "web_search")
-	require.Contains(t, sender.LastText(), "web_fetch")
+	require.Contains(t, sender.LastPlainCard(), "datetime")
+	require.Contains(t, sender.LastPlainCard(), "web_search")
+	require.Contains(t, sender.LastPlainCard(), "web_fetch")
 }
 
 func TestUS3_ModelSwitchPersistsWithoutInvokingLLM(t *testing.T) {
@@ -83,7 +83,7 @@ func TestUS3_ModelSwitchPersistsWithoutInvokingLLM(t *testing.T) {
 	require.Equal(t, 0, provider.Calls())
 	require.Equal(t, 0, openai.Calls())
 	require.Equal(t, 0, locker.Calls())
-	require.Contains(t, sender.LastText(), "gpt")
+	require.Contains(t, sender.LastPlainCard(), "gpt")
 
 	sess, err := baseStore.Get(context.Background(), "p2p:ou_cmd")
 	require.NoError(t, err)

@@ -30,8 +30,9 @@ func composeSystem(preamble string, reg *tool.Registry) string {
 	if preamble != "" {
 		b.WriteString(preamble)
 	} else {
-		b.WriteString("You are an AI assistant running inside a Feishu (Lark) chat. Answer in the user's language. Prefer concise, well-formatted markdown. When a tool is appropriate, call it — do not guess time-sensitive facts.")
+		b.WriteString("You are an AI assistant running inside a Feishu (Lark) chat. Answer in the user's language. Prefer concise, well-formatted markdown. When a tool is appropriate, call it; do not guess time-sensitive facts.")
 	}
+	b.WriteString("\n\nFormatting constraints for Feishu cards: output only Feishu-compatible markdown (lark_md subset). Do not use markdown headings that start with #; use bold section titles like **结论** instead. Prefer short paragraphs and bullet lists. Avoid HTML tags and markdown tables.")
 	avail := reg.Available()
 	if len(avail) > 0 {
 		b.WriteString("\n\nAvailable tools:\n")

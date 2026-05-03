@@ -1,5 +1,7 @@
 package lark
 
+import "github.com/anomalyco/ssh-bot/internal/render"
+
 // InitialCardJSON returns the JSON bytes of the "just received your message"
 // placeholder card sent before the agent loop produces its first event.
 // Its purpose is to give the user immediate feedback (SC-001: < 3s).
@@ -18,6 +20,7 @@ func InitialCardJSON() []byte {
 // PlainTextCardJSON builds a minimal card carrying a single markdown string.
 // Used for command replies (/clear, /help, etc.).
 func PlainTextCardJSON(text string) []byte {
+	text = render.NormalizeLarkMarkdown(text)
 	body := map[string]any{
 		"config": map[string]any{"update_multi": true, "wide_screen_mode": true},
 		"header": map[string]any{

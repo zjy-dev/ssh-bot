@@ -39,6 +39,7 @@ func (p *integrationProvider) Stream(ctx context.Context, _ llm.ChatRequest) (<-
 type integrationSender struct {
 	initials int
 	patches  [][]byte
+	replies  []string
 }
 
 func (s *integrationSender) SendInitialCard(context.Context, string) (string, error) {
@@ -55,7 +56,10 @@ func (s *integrationSender) Patch(_ context.Context, _ string, body []byte) erro
 	return nil
 }
 
-func (s *integrationSender) ReplyInThread(context.Context, string, string) error { return nil }
+func (s *integrationSender) ReplyInThread(_ context.Context, _ string, text string) error {
+	s.replies = append(s.replies, text)
+	return nil
+}
 
 type integrationLocker struct{}
 
